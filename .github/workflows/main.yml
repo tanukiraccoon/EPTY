@@ -1,0 +1,67 @@
+name: Update Guide
+
+on:
+  schedule:
+    - cron: "0 0 * * *"
+  workflow_dispatch:    
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    
+    env:
+      PUBLIC_REPO: ${{ secrets.PUBLIC_REPO }}
+      PRIVATE_REPO: ${{ secrets.PRIVATE_REPO }}
+      PUBLIC_WORKDIR: ${{ secrets.PUBLIC_WORKDIR }}
+      PRIVATE_WORKDIR: ${{ secrets.PRIVATE_WORKDIR }}
+      COMMAND: ${{ secrets.COMMAND }}
+      PRIVATE_PAT: ${{ secrets.PRIVATE_PAT }}
+      
+    steps:
+      - name: Checkout workflow repo
+        uses: actions/checkout@v3
+
+      - name: Clone public repo
+        run: $PUBLIC_REPO
+
+      - name: Clone private repo
+        run: |
+          git clone https://x-access-token:${PRIVATE_PAT}@github.com/${{ env.PRIVATE_REPO }}
+          
+      - name: Copy temporary script
+        run: cp $PRIVATE_WORKDIR/main.js $PUBLIC_WORKDIR
+
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: "22.14.0"
+
+      - name: Install dependencies
+        working-directory:  ${{ env.PUBLIC_WORKDIR }}
+        run: npm install
+
+      - name: Run mapping script
+        working-directory: ${{ env.PUBLIC_WORKDIR }}
+        run: |
+          node main.js
+          
+          
+      - name: Run generate script
+        working-directory: ${{ env.PUBLIC_WORKDIR }}
+        run: |
+          $COMMAND
+
+      - name: Copy guide.xml to workflow repo
+        run: cp $PUBLIC_WORKDIR/guide.xml ./guide.xml
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Commit and Push changes
+        run: |
+          git add guide.xml
+          git commit -m "Update guide.xml from workflow" || echo "No changes to commit"
+          git push
